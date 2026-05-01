@@ -1,0 +1,6 @@
+# Citizen Election Assistant — Dependencies
+# Minimalist library list optimized for size and efficiency
+
+streamlit>=1.30.0
+python-dotenv>=1.0.0
+pytest>=7.4.0
