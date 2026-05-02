@@ -1,27 +1,4 @@
-"""
-app.py — Citizen Election Assistant Entry Point
-
-A thin Streamlit dispatcher that delegates all rendering to
-``src.ui.pages`` and all logic to ``src.logic``. This module only
-configures the page, injects CSS, manages security headers, and
-dispatches to the active tab.
-"""
-
 import streamlit as st
-
-from src.ui.styles import inject_custom_css
-from src.ui.pages import (
-    render_home_page,
-    render_roadmap_page,
-    render_ballot_page,
-    render_mythbuster_page,
-)
-from src.services.cloud_logging_service import get_logger, log_user_action
-from src.services.bigquery_service import track_event
-from src.utils.translations import SUPPORTED_LANGUAGES, get_lang_code, t
-from src.utils.accessibility import SKIP_NAV_HTML, SKIP_NAV_CSS
-from src.utils.security import generate_csp_header, check_rate_limit, generate_csrf_token
-
 
 # ── page configuration (must be FIRST Streamlit call) ──
 st.set_page_config(
@@ -36,6 +13,19 @@ st.set_page_config(
         ),
     },
 )
+
+from src.ui.styles import inject_custom_css
+from src.ui.pages import (
+    render_home_page,
+    render_roadmap_page,
+    render_ballot_page,
+    render_mythbuster_page,
+)
+from src.services.cloud_logging_service import get_logger, log_user_action
+from src.services.bigquery_service import track_event
+from src.utils.translations import SUPPORTED_LANGUAGES, get_lang_code, t
+from src.utils.accessibility import SKIP_NAV_HTML, SKIP_NAV_CSS
+from src.utils.security import generate_csp_header, check_rate_limit, generate_csrf_token
 
 # ── inject CSS design system + accessibility CSS ──
 inject_custom_css()
