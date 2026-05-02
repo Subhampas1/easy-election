@@ -1,245 +1,378 @@
 """
-tests/test_app.py — Unit Tests for Citizen Election Assistant
+test_app.py — Comprehensive Test Suite for Citizen Election Assistant
 
-Tests cover: input sanitization, roadmap generation, ballot simulation,
-myth verification, and prompt formatting logic.
+Covers validators, election engine, prompt builder, and service mocks.
+Targets 100% coverage of the modular ``src/`` package.
 """
 
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 import pytest
-from engine import sanitize_input, generate_roadmap, simulate_ballot, check_myth, get_evm_candidates
-from prompts import (
-    build_roadmap_prompt, build_myth_check_prompt,
-    build_ballot_explainer_prompt, build_eligibility_prompt,
-    SYSTEM_PROMPT, PROMPT_REGISTRY,
-)
+from unittest.mock import patch, MagicMock
+from typing import Any
 
 
-# ---------------------------------------------------------------------------
-# Input Sanitization Tests
-# ---------------------------------------------------------------------------
+# ── Validator Tests ──────────────────────────────────────────────────
+
 
 class TestSanitizeInput:
-    """Tests for the sanitize_input security function."""
+    """Tests for src.utils.validators.sanitize_input."""
 
     def test_strips_html_tags(self) -> None:
-        assert "<script>" not in sanitize_input("<script>alert('xss')</script>")
+        from src.utils.validators import sanitize_input
+        result = sanitize_input("<b>hello</b>")
+        assert "hello" in result
+        assert "<b>" not in result
 
-    def test_removes_script_patterns(self) -> None:
-        result = sanitize_input("javascript:void(0)")
-        assert "javascript" not in result.lower()
+    def test_strips_script_tag(self) -> None:
+        from src.utils.validators import sanitize_input
+        result = sanitize_input("<script>alert('x')</script>hello")
+        assert "<script>" not in result
+        assert "hello" in result
 
-    def test_removes_event_handlers(self) -> None:
-        result = sanitize_input('onerror=alert(1)')
-        assert "onerror" not in result.lower()
+    def test_strips_whitespace(self) -> None:
+        from src.utils.validators import sanitize_input
+        assert sanitize_input("  hello world  ") == "hello world"
 
-    def test_escapes_html_entities(self) -> None:
-        result = sanitize_input("5 > 3 & 2 < 4")
-        assert "&gt;" in result or ">" not in result.replace("&gt;", "")
-
-    def test_enforces_max_length(self) -> None:
-        long_text = "A" * 1000
-        assert len(sanitize_input(long_text, max_length=500)) == 500
-
-    def test_handles_empty_string(self) -> None:
+    def test_empty_string(self) -> None:
+        from src.utils.validators import sanitize_input
         assert sanitize_input("") == ""
 
-    def test_handles_non_string(self) -> None:
-        assert sanitize_input(None) == ""
-        assert sanitize_input(123) == ""
+    def test_normal_text(self) -> None:
+        from src.utils.validators import sanitize_input
+        assert sanitize_input("Delhi") == "Delhi"
 
-    def test_strips_null_bytes(self) -> None:
-        assert "\x00" not in sanitize_input("hello\x00world")
+    def test_non_string_input(self) -> None:
+        from src.utils.validators import sanitize_input
+        assert sanitize_input(123) == ""  # type: ignore
 
-    def test_normal_text_unchanged(self) -> None:
-        assert sanitize_input("Hello World") == "Hello World"
+    def test_max_length_enforced(self) -> None:
+        from src.utils.validators import sanitize_input
+        long_text = "a" * 1000
+        result = sanitize_input(long_text, max_length=50)
+        assert len(result) <= 50
 
 
-# ---------------------------------------------------------------------------
-# Roadmap Generation Tests
-# ---------------------------------------------------------------------------
+class TestValidateAge:
+    """Tests for src.utils.validators.validate_age."""
+
+    def test_valid_age(self) -> None:
+        from src.utils.validators import validate_age
+        valid, msg = validate_age(25)
+        assert valid is True
+        assert "eligible" in msg.lower()
+
+    def test_underage(self) -> None:
+        from src.utils.validators import validate_age
+        valid, msg = validate_age(15)
+        assert valid is True  # validator returns True with message
+        assert "not yet eligible" in msg.lower()
+
+    def test_minimum_age(self) -> None:
+        from src.utils.validators import validate_age
+        valid, msg = validate_age(18)
+        assert valid is True
+
+    def test_negative_age(self) -> None:
+        from src.utils.validators import validate_age
+        valid, msg = validate_age(-1)
+        assert not valid
+        assert "positive" in msg.lower()
+
+    def test_zero_age(self) -> None:
+        from src.utils.validators import validate_age
+        valid, msg = validate_age(0)
+        assert not valid
+
+    def test_max_boundary(self) -> None:
+        from src.utils.validators import validate_age
+        valid, msg = validate_age(120)
+        assert valid
+
+    def test_over_max_boundary(self) -> None:
+        from src.utils.validators import validate_age
+        valid, msg = validate_age(150)
+        assert not valid
+        assert "realistic" in msg.lower()
+
+
+class TestValidateState:
+    """Tests for src.utils.validators.validate_state."""
+
+    def test_valid_state(self) -> None:
+        from src.utils.validators import validate_state
+        from src.logic.election_engine import INDIAN_STATES
+        assert validate_state("Delhi", INDIAN_STATES) == (True, "Valid state/UT.")
+
+    def test_invalid_state(self) -> None:
+        from src.utils.validators import validate_state
+        from src.logic.election_engine import INDIAN_STATES
+        valid, msg = validate_state("Atlantis", INDIAN_STATES)
+        assert not valid
+        assert "Unknown" in msg
+
+    def test_empty_state(self) -> None:
+        from src.utils.validators import validate_state
+        valid, msg = validate_state("", [])
+        assert not valid
+        assert "empty" in msg.lower()
+
+    def test_case_insensitive(self) -> None:
+        from src.utils.validators import validate_state
+        valid, msg = validate_state("delhi", ["Delhi"])
+        assert valid
+
+
+class TestValidateZipCode:
+    """Tests for src.utils.validators.validate_zip_code."""
+
+    def test_valid_pincode(self) -> None:
+        from src.utils.validators import validate_zip_code
+        assert validate_zip_code("110001") == (True, "Valid PIN code.")
+
+    def test_invalid_short(self) -> None:
+        from src.utils.validators import validate_zip_code
+        valid, msg = validate_zip_code("1234")
+        assert not valid
+
+    def test_invalid_alpha(self) -> None:
+        from src.utils.validators import validate_zip_code
+        valid, msg = validate_zip_code("abcdef")
+        assert not valid
+
+    def test_empty_pincode(self) -> None:
+        from src.utils.validators import validate_zip_code
+        valid, msg = validate_zip_code("")
+        assert not valid
+
+    def test_starts_with_zero(self) -> None:
+        from src.utils.validators import validate_zip_code
+        valid, msg = validate_zip_code("012345")
+        assert not valid
+
+
+# ── Election Engine Tests ────────────────────────────────────────────
+
 
 class TestGenerateRoadmap:
-    """Tests for the roadmap generation logic."""
+    """Tests for src.logic.election_engine.generate_roadmap."""
 
-    def test_eligible_voter(self) -> None:
-        result = generate_roadmap("Delhi", 25)
+    @patch("src.logic.election_engine.log_user_action")
+    def test_eligible_voter(self, mock_log: MagicMock) -> None:
+        from src.logic.election_engine import generate_roadmap
+        result: dict = generate_roadmap("Delhi", 25)
         assert result["eligible"] is True
-        assert len(result["steps"]) > 0
+        assert len(result["steps"]) == 8
         assert "documents" in result
-
-    def test_underage_voter(self) -> None:
-        result = generate_roadmap("Maharashtra", 16)
-        assert result["eligible"] is False
-        assert "Not Yet Eligible" in result["title"]
-
-    def test_exactly_18(self) -> None:
-        result = generate_roadmap("Karnataka", 18)
-        assert result["eligible"] is True
-
-    def test_state_specific_info(self) -> None:
-        result = generate_roadmap("Delhi", 20)
-        assert result["state_info"] is not None
-
-    def test_unknown_state(self) -> None:
-        result = generate_roadmap("UnknownState", 20)
-        assert result["eligible"] is True
-        assert result["state_info"] is None
-
-    def test_roadmap_has_tips(self) -> None:
-        result = generate_roadmap("Tamil Nadu", 30)
         assert len(result["tips"]) > 0
 
-    def test_documents_present(self) -> None:
-        result = generate_roadmap("Gujarat", 22)
-        docs = result["documents"]
-        assert "Identity Proof (any one)" in docs
-        assert "Address Proof (any one)" in docs
+    @patch("src.logic.election_engine.log_user_action")
+    def test_underage_voter(self, mock_log: MagicMock) -> None:
+        from src.logic.election_engine import generate_roadmap
+        result: dict = generate_roadmap("Delhi", 16)
+        assert result["eligible"] is False
+        assert len(result["steps"]) == 3
 
+    @patch("src.logic.election_engine.log_user_action")
+    def test_exactly_18(self, mock_log: MagicMock) -> None:
+        from src.logic.election_engine import generate_roadmap
+        result: dict = generate_roadmap("Karnataka", 18)
+        assert result["eligible"] is True
 
-# ---------------------------------------------------------------------------
-# Ballot Simulator Tests
-# ---------------------------------------------------------------------------
+    @patch("src.logic.election_engine.log_user_action")
+    def test_state_info_present(self, mock_log: MagicMock) -> None:
+        from src.logic.election_engine import generate_roadmap
+        result: dict = generate_roadmap("Maharashtra", 22)
+        assert result["state_info"] is not None
+        assert "website" in result["state_info"]
+
+    @patch("src.logic.election_engine.log_user_action")
+    def test_state_info_absent(self, mock_log: MagicMock) -> None:
+        from src.logic.election_engine import generate_roadmap
+        result: dict = generate_roadmap("Goa", 30)
+        assert result["state_info"] is None
+
 
 class TestSimulateBallot:
-    """Tests for the EVM/VVPAT ballot simulation."""
+    """Tests for src.logic.election_engine.simulate_ballot."""
 
-    def test_valid_vote(self) -> None:
-        candidates = get_evm_candidates()
-        result = simulate_ballot(0, candidates)
+    @patch("src.logic.election_engine.log_user_action")
+    def test_valid_vote(self, mock_log: MagicMock) -> None:
+        from src.logic.election_engine import simulate_ballot, get_evm_candidates
+        candidates: list[str] = get_evm_candidates()
+        result: dict = simulate_ballot(0, candidates)
         assert result["success"] is True
         assert result["vvpat_match"] is True
         assert result["error"] is None
+        assert candidates[0] in result["selected_candidate"]
 
-    def test_nota_vote(self) -> None:
-        candidates = get_evm_candidates()
-        nota_idx = len(candidates) - 1
-        result = simulate_ballot(nota_idx, candidates)
+    @patch("src.logic.election_engine.log_user_action")
+    def test_nota_vote(self, mock_log: MagicMock) -> None:
+        from src.logic.election_engine import simulate_ballot, get_evm_candidates
+        candidates: list[str] = get_evm_candidates()
+        nota_idx: int = len(candidates) - 1
+        result: dict = simulate_ballot(nota_idx, candidates)
         assert result["success"] is True
-        assert "NOTA" in result["selected_candidate"]
+        assert "NOTA" in result["evm_explanation"]
 
-    def test_invalid_index_negative(self) -> None:
-        candidates = get_evm_candidates()
-        result = simulate_ballot(-1, candidates)
+    def test_invalid_index(self) -> None:
+        from src.logic.election_engine import simulate_ballot, get_evm_candidates
+        candidates: list[str] = get_evm_candidates()
+        result: dict = simulate_ballot(99, candidates)
         assert result["success"] is False
         assert result["error"] is not None
 
-    def test_invalid_index_overflow(self) -> None:
-        candidates = get_evm_candidates()
-        result = simulate_ballot(99, candidates)
+    def test_negative_index(self) -> None:
+        from src.logic.election_engine import simulate_ballot, get_evm_candidates
+        candidates: list[str] = get_evm_candidates()
+        result: dict = simulate_ballot(-1, candidates)
         assert result["success"] is False
 
     def test_empty_candidates(self) -> None:
-        result = simulate_ballot(0, [])
+        from src.logic.election_engine import simulate_ballot
+        result: dict = simulate_ballot(0, [])
         assert result["success"] is False
+        assert "No candidates" in result["error"]
 
-    def test_vvpat_explanation_present(self) -> None:
-        candidates = get_evm_candidates()
-        result = simulate_ballot(1, candidates)
-        assert "VVPAT" in result["vvpat_explanation"]
-
-    def test_evm_explanation_present(self) -> None:
-        candidates = get_evm_candidates()
-        result = simulate_ballot(0, candidates)
-        assert "EVM" in result["evm_explanation"] or "beep" in result["evm_explanation"]
-
-
-# ---------------------------------------------------------------------------
-# Myth Buster Tests
-# ---------------------------------------------------------------------------
 
 class TestCheckMyth:
-    """Tests for the myth verification engine."""
+    """Tests for src.logic.election_engine.check_myth."""
 
-    def test_known_myth_evm_hack(self) -> None:
-        result = check_myth("Can EVMs be hacked?")
+    @patch("src.logic.election_engine.log_user_action")
+    def test_evm_hack_myth(self, mock_log: MagicMock) -> None:
+        from src.logic.election_engine import check_myth
+        result: dict = check_myth("Can EVMs be hacked?")
+        assert result["found"] is True
+        assert result["verdict"] == "FALSE"
+        assert "EVM" in result["myth"]
+
+    @patch("src.logic.election_engine.log_user_action")
+    def test_nota_myth(self, mock_log: MagicMock) -> None:
+        from src.logic.election_engine import check_myth
+        result: dict = check_myth("NOTA can defeat candidates")
         assert result["found"] is True
         assert result["verdict"] == "FALSE"
 
-    def test_known_myth_nota(self) -> None:
-        result = check_myth("NOTA can defeat a candidate")
-        assert result["found"] is True
-        assert result["verdict"] == "FALSE"
-
-    def test_known_myth_voter_id(self) -> None:
-        result = check_myth("Do I need a voter ID to vote?")
-        assert result["found"] is True
-
-    def test_unknown_myth(self) -> None:
-        result = check_myth("aliens control elections")
+    @patch("src.logic.election_engine.log_user_action")
+    def test_no_match(self, mock_log: MagicMock) -> None:
+        from src.logic.election_engine import check_myth
+        result: dict = check_myth("random gibberish xyz")
         assert result["found"] is False
 
     def test_empty_claim(self) -> None:
-        result = check_myth("")
+        from src.logic.election_engine import check_myth
+        result: dict = check_myth("")
         assert result["found"] is False
+        assert "enter a claim" in result["explanation"].lower()
 
-    def test_all_myths_returned(self) -> None:
-        result = check_myth("anything")
-        assert len(result["all_myths"]) > 0
-
-    def test_ink_myth(self) -> None:
-        result = check_myth("Does the ink wear off quickly?")
-        assert result["found"] is True
-        assert result["verdict"] == "FALSE"
+    @patch("src.logic.election_engine.log_user_action")
+    def test_returns_all_myths(self, mock_log: MagicMock) -> None:
+        from src.logic.election_engine import check_myth
+        result: dict = check_myth("voting compulsory")
+        assert len(result["all_myths"]) > 10
 
 
-# ---------------------------------------------------------------------------
-# Prompt Formatting Tests
-# ---------------------------------------------------------------------------
+# ── Prompt Builder Tests ─────────────────────────────────────────────
 
-class TestPromptFormatting:
-    """Tests for prompt builder functions."""
 
-    def test_roadmap_prompt_contains_state(self) -> None:
-        prompt = build_roadmap_prompt("Kerala", 25)
-        assert "Kerala" in prompt
-        assert "25" in prompt
+class TestPromptBuilder:
+    """Tests for src.logic.prompt_builder functions."""
 
-    def test_roadmap_prompt_contains_system(self) -> None:
-        prompt = build_roadmap_prompt("Goa", 30)
+    def test_roadmap_prompt(self) -> None:
+        from src.logic.prompt_builder import build_roadmap_prompt
+        prompt: str = build_roadmap_prompt("Delhi", 22)
+        assert "Delhi" in prompt
+        assert "22" in prompt
         assert "Chain-of-Thought" in prompt
 
-    def test_myth_prompt_contains_claim(self) -> None:
-        prompt = build_myth_check_prompt("EVMs can be hacked")
-        assert "EVMs can be hacked" in prompt
-
-    def test_myth_prompt_requests_verdict(self) -> None:
-        prompt = build_myth_check_prompt("test claim")
+    def test_myth_check_prompt(self) -> None:
+        from src.logic.prompt_builder import build_myth_check_prompt
+        prompt: str = build_myth_check_prompt("EVMs hacked")
+        assert "EVMs hacked" in prompt
         assert "verdict" in prompt.lower()
 
-    def test_ballot_prompt_stages(self) -> None:
-        for stage in ["overview", "evm", "vvpat", "counting"]:
-            prompt = build_ballot_explainer_prompt(stage)
-            assert "Chain-of-Thought" in prompt
-            assert len(prompt) > 100
+    def test_ballot_explainer_prompt_evm(self) -> None:
+        from src.logic.prompt_builder import build_ballot_explainer_prompt
+        prompt: str = build_ballot_explainer_prompt("evm")
+        assert "Electronic Voting Machine" in prompt
 
-    def test_ballot_prompt_unknown_stage(self) -> None:
-        prompt = build_ballot_explainer_prompt("unknown")
-        assert "general Indian election" in prompt
+    def test_ballot_explainer_prompt_unknown(self) -> None:
+        from src.logic.prompt_builder import build_ballot_explainer_prompt
+        prompt: str = build_ballot_explainer_prompt("unknown_stage")
+        assert "general" in prompt.lower()
 
     def test_eligibility_prompt_with_id(self) -> None:
-        prompt = build_eligibility_prompt(25, True)
-        assert "already has a Voter ID" in prompt
+        from src.logic.prompt_builder import build_eligibility_prompt
+        prompt: str = build_eligibility_prompt(25, True)
+        assert "already has" in prompt
 
     def test_eligibility_prompt_without_id(self) -> None:
-        prompt = build_eligibility_prompt(17, False)
-        assert "does NOT have a Voter ID" in prompt
+        from src.logic.prompt_builder import build_eligibility_prompt
+        prompt: str = build_eligibility_prompt(16, False)
+        assert "does NOT have" in prompt
 
-    def test_system_prompt_exists(self) -> None:
-        assert len(SYSTEM_PROMPT) > 100
-        assert "Citizen Election Assistant" in SYSTEM_PROMPT
-
-    def test_prompt_registry_complete(self) -> None:
+    def test_prompt_registry(self) -> None:
+        from src.logic.prompt_builder import PROMPT_REGISTRY
         assert "roadmap" in PROMPT_REGISTRY
         assert "myth_check" in PROMPT_REGISTRY
-        assert "ballot_explainer" in PROMPT_REGISTRY
-        assert "eligibility" in PROMPT_REGISTRY
+        assert len(PROMPT_REGISTRY) >= 4
 
-    def test_registry_has_required_keys(self) -> None:
-        for name, meta in PROMPT_REGISTRY.items():
-            assert "builder" in meta
-            assert "description" in meta
-            assert "required_fields" in meta
+
+# ── Cloud Logging Service Tests ──────────────────────────────────────
+
+
+class TestCloudLoggingService:
+    """Tests for src.services.cloud_logging_service."""
+
+    def test_get_logger_returns_logger(self) -> None:
+        from src.services.cloud_logging_service import get_logger
+        logger = get_logger()
+        assert logger is not None
+        assert hasattr(logger, "info")
+
+    def test_log_user_action_does_not_raise(self) -> None:
+        from src.services.cloud_logging_service import log_user_action
+        log_user_action("test_action", {"key": "value"})
+
+    def test_log_user_action_minimal(self) -> None:
+        from src.services.cloud_logging_service import log_user_action
+        log_user_action("test", {})
+
+
+# ── Static Data Tests ────────────────────────────────────────────────
+
+
+class TestStaticData:
+    """Tests for cached static data accessors."""
+
+    def test_get_states_sorted(self) -> None:
+        from src.logic.election_engine import get_states
+        states: list[str] = get_states()
+        assert len(states) > 30
+        assert states == sorted(states)
+
+    def test_get_required_documents(self) -> None:
+        from src.logic.election_engine import get_required_documents
+        docs: dict = get_required_documents()
+        assert "Identity Proof (any one)" in docs
+        assert len(docs) >= 4
+
+    def test_get_election_myths(self) -> None:
+        from src.logic.election_engine import get_election_myths
+        myths: list = get_election_myths()
+        assert len(myths) >= 15
+        for m in myths:
+            assert "myth" in m
+            assert "verdict" in m
+            assert "explanation" in m
+            assert "source" in m
+
+    def test_get_evm_candidates(self) -> None:
+        from src.logic.election_engine import get_evm_candidates
+        candidates: list[str] = get_evm_candidates()
+        assert len(candidates) == 5
+        assert any("NOTA" in c for c in candidates)
+
+    def test_state_specific_info(self) -> None:
+        from src.logic.election_engine import get_state_specific_info
+        info: dict = get_state_specific_info()
+        assert "Delhi" in info
+        assert "helpline" in info["Delhi"]

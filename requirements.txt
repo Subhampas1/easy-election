@@ -1,6 +1,10 @@
 # Citizen Election Assistant — Dependencies
-# Minimalist library list optimized for size and efficiency
+# Modular architecture with Google Cloud integration
 
 streamlit>=1.30.0
 python-dotenv>=1.0.0
 pytest>=7.4.0
+
+# Google Cloud Services
+google-cloud-logging>=3.8.0
+google-cloud-storage>=2.14.0
