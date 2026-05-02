@@ -3,7 +3,8 @@ app.py — Citizen Election Assistant Entry Point
 
 A thin Streamlit dispatcher that delegates all rendering to
 ``src.ui.pages`` and all logic to ``src.logic``. This module only
-configures the page, injects CSS, and dispatches to the active tab.
+configures the page, injects CSS, manages security headers, and
+dispatches to the active tab.
 """
 
 import streamlit as st
@@ -16,7 +17,10 @@ from src.ui.pages import (
     render_mythbuster_page,
 )
 from src.services.cloud_logging_service import get_logger, log_user_action
+from src.services.bigquery_service import track_event
 from src.utils.translations import SUPPORTED_LANGUAGES, get_lang_code, t
+from src.utils.accessibility import SKIP_NAV_HTML, SKIP_NAV_CSS
+from src.utils.security import generate_csp_header, check_rate_limit, generate_csrf_token
 
 
 # ── page configuration (must be FIRST Streamlit call) ──
@@ -33,11 +37,25 @@ st.set_page_config(
     },
 )
 
-# ── inject CSS design system ──
+# ── inject CSS design system + accessibility CSS ──
 inject_custom_css()
+st.markdown(SKIP_NAV_CSS, unsafe_allow_html=True)
+st.markdown(SKIP_NAV_HTML, unsafe_allow_html=True)
 
 # ── initialize logger ──
 logger = get_logger()
+
+# ── security: CSP header + CSRF token ──
+csp_header: str = generate_csp_header()
+st.markdown(
+    f'<meta http-equiv="Content-Security-Policy" content="{csp_header}">',
+    unsafe_allow_html=True,
+)
+if "csrf_token" not in st.session_state:
+    st.session_state["csrf_token"] = generate_csrf_token()
+
+# ── main content landmark ──
+st.markdown('<div id="main-content" role="main" aria-label="Primary content">', unsafe_allow_html=True)
 
 
 # ── sidebar navigation ──
@@ -78,6 +96,15 @@ with st.sidebar:
     )
 
     st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
+
+    # ── accessibility: high contrast toggle ──
+    high_contrast: bool = st.toggle("High Contrast Mode", key="high_contrast_toggle", value=False)
+    if high_contrast:
+        st.markdown(
+            '<script>document.body.classList.add("high-contrast");</script>',
+            unsafe_allow_html=True,
+        )
+
     st.markdown(
         f'<div style="text-align:center;padding:0.5rem;">'
         f'<p style="color:#64748b!important;font-size:0.75rem;margin:0;">'
@@ -88,8 +115,15 @@ with st.sidebar:
     )
 
 
+# ── rate limiting check ──
+session_id: str = st.session_state.get("csrf_token", "default")[:16]
+if not check_rate_limit(session_id):
+    st.error("Too many requests. Please wait a moment before trying again.")
+    st.stop()
+
 # ── route to the active page ──
 log_user_action("page_view", {"page": page, "lang": lang})
+track_event("page_view", {"page": page, "lang": lang}, session_id)
 
 if page == nav_options[0]:
     render_home_page(lang)
@@ -101,3 +135,6 @@ elif page == nav_options[3]:
     render_mythbuster_page(lang)
 else:
     render_home_page(lang)
+
+# ── close main content landmark ──
+st.markdown('</div>', unsafe_allow_html=True)

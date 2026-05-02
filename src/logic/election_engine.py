@@ -13,6 +13,7 @@ import streamlit as st
 
 from src.utils.validators import sanitize_input
 from src.services.cloud_logging_service import get_logger, log_user_action
+from src.utils.performance import measure_execution_time
 
 
 @dataclass
@@ -160,6 +161,7 @@ def get_state_specific_info() -> dict[str, dict[str, str]]:
     }
 
 
+@measure_execution_time
 def generate_roadmap(state: str, age: int) -> dict:
     """Generate a personalized election-readiness roadmap.
 
@@ -222,6 +224,7 @@ def get_evm_candidates() -> list[str]:
     return EVM_CANDIDATES_DEFAULT.copy()
 
 
+@measure_execution_time
 def simulate_ballot(candidate_index: int, candidates: list[str]) -> dict:
     """Simulate the EVM voting and VVPAT verification process.
 
@@ -265,6 +268,7 @@ def simulate_ballot(candidate_index: int, candidates: list[str]) -> dict:
     return {"success": True, "selected_candidate": selected, "vvpat_match": True, "evm_explanation": evm_explanation, "vvpat_explanation": vvpat_explanation, "error": None}
 
 
+@measure_execution_time
 def check_myth(claim: str) -> dict:
     """Verify an election-related claim against the curated myth database.
 

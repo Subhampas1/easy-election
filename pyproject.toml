@@ -1,0 +1,45 @@
+[project]
+name = "citizen-election-assistant"
+version = "2.0.0"
+description = "AI-powered multilingual election guidance platform for Indian voters"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Subham Panigrahi"}
+]
+keywords = ["election", "india", "streamlit", "google-cloud", "ai", "vertex-ai", "bigquery"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Framework :: Streamlit",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Education",
+]
+
+[project.urls]
+Homepage = "https://github.com/Subhampas1/easy-election"
+Repository = "https://github.com/Subhampas1/easy-election"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+select = ["E", "F", "W", "I", "N", "UP", "ANN", "S", "B", "A", "C4", "SIM"]
+ignore = ["ANN101", "ANN102", "S101"]
+
+[tool.ruff.per-file-ignores]
+"tests/*" = ["ANN", "S"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
