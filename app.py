@@ -42,19 +42,26 @@ logger = get_logger()
 
 # ── sidebar navigation ──
 with st.sidebar:
-    st.markdown("## 🇮🇳 Election Assistant")
+    # ── branded header ──
+    st.markdown(
+        '<div class="sidebar-brand">'
+        '<span class="sb-logo">🗳️</span>'
+        '<span class="sb-title">Election Assistant</span>'
+        '<span class="sb-sub">Government of India</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     # ── language selector ──
     lang_name: str = st.selectbox(
-        "🌐 Language",
+        t("language", "en"),
         options=list(SUPPORTED_LANGUAGES.keys()),
         key="lang_select",
-        label_visibility="collapsed",
     )
     lang: str = get_lang_code(lang_name)
     st.session_state["lang"] = lang
 
-    st.markdown("---")
+    st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
 
     nav_options: list[str] = [
         t("nav_home", lang),
@@ -64,13 +71,13 @@ with st.sidebar:
     ]
 
     page: str = st.radio(
-        "Navigate to",
+        "Navigate",
         options=nav_options,
         key="nav_radio",
         label_visibility="collapsed",
     )
 
-    st.markdown("---")
+    st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
     st.markdown(
         f'<div style="text-align:center;padding:0.5rem;">'
         f'<p style="color:#64748b!important;font-size:0.75rem;margin:0;">'

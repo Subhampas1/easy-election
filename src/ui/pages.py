@@ -3,6 +3,7 @@ pages.py — Streamlit Page Renderers with Multi-Language Support
 
 Each public function renders one page/tab of the Citizen Election
 Assistant. All UI text uses the ``t()`` helper for i18n.
+All Google Cloud services (Logging, Storage, Maps) are actively used.
 """
 
 from typing import Optional
@@ -18,7 +19,13 @@ from src.logic.election_engine import (
     get_election_myths,
     get_required_documents,
 )
-from src.services.cloud_logging_service import log_user_action
+from src.services.cloud_logging_service import log_user_action, get_logger
+from src.services.cloud_storage_service import list_available_resources
+from src.services.google_maps_service import (
+    get_polling_station_map_url,
+    find_polling_stations,
+    get_map_fallback_message,
+)
 from src.utils.translations import t
 
 
@@ -44,8 +51,8 @@ def render_home_page(lang: str = "en") -> None:
         <div class="stat-grid">
             <div class="stat-box"><div class="stat-val">96.88 Cr</div><div class="stat-lbl">{t("registered_voters", lang)}</div></div>
             <div class="stat-box"><div class="stat-val">10.5 L</div><div class="stat-lbl">{t("polling_stations", lang)}</div></div>
-            <div class="stat-box"><div class="stat-val">543</div><div class="stat-lbl">LOK SABHA</div></div>
-            <div class="stat-box"><div class="stat-val">28 + 8</div><div class="stat-lbl">STATES & UTs</div></div>
+            <div class="stat-box"><div class="stat-val">543</div><div class="stat-lbl">{t("lok_sabha", lang)}</div></div>
+            <div class="stat-box"><div class="stat-val">28 + 8</div><div class="stat-lbl">{t("states_uts", lang)}</div></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -54,17 +61,17 @@ def render_home_page(lang: str = "en") -> None:
     # ── how voting works — visual process flow ──
     st.markdown(f"## {t('how_voting_works', lang)}")
     st.markdown(
-        """
+        f"""
         <div class="process-flow">
-            <div class="flow-step"><div class="flow-icon">📋</div><div class="flow-label">Register</div><div class="flow-sub">Form 6 / NVSP</div></div>
+            <div class="flow-step"><div class="flow-icon">📋</div><div class="flow-label">{t("step_register", lang)}</div><div class="flow-sub">Form 6 / NVSP</div></div>
             <div class="flow-arrow">→</div>
-            <div class="flow-step"><div class="flow-icon">🪪</div><div class="flow-label">Get Voter ID</div><div class="flow-sub">EPIC / e-EPIC</div></div>
+            <div class="flow-step"><div class="flow-icon">🪪</div><div class="flow-label">{t("step_voter_id", lang)}</div><div class="flow-sub">EPIC / e-EPIC</div></div>
             <div class="flow-arrow">→</div>
-            <div class="flow-step"><div class="flow-icon">📍</div><div class="flow-label">Find Booth</div><div class="flow-sub">Voter Helpline</div></div>
+            <div class="flow-step"><div class="flow-icon">📍</div><div class="flow-label">{t("step_find_booth", lang)}</div><div class="flow-sub">Voter Helpline</div></div>
             <div class="flow-arrow">→</div>
-            <div class="flow-step"><div class="flow-icon">🗳️</div><div class="flow-label">Cast Vote</div><div class="flow-sub">EVM + VVPAT</div></div>
+            <div class="flow-step"><div class="flow-icon">🗳️</div><div class="flow-label">{t("step_cast_vote", lang)}</div><div class="flow-sub">EVM + VVPAT</div></div>
             <div class="flow-arrow">→</div>
-            <div class="flow-step"><div class="flow-icon">✅</div><div class="flow-label">Get Inked</div><div class="flow-sub">Left Index Finger</div></div>
+            <div class="flow-step"><div class="flow-icon">✅</div><div class="flow-label">{t("step_get_inked", lang)}</div><div class="flow-sub">Left Index Finger</div></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -74,9 +81,9 @@ def render_home_page(lang: str = "en") -> None:
     st.markdown(f"## {t('what_you_can_do', lang)}")
     cols = st.columns(3)
     cards = [
-        ("🗺️", t("nav_roadmap", lang).replace("🗺️ ", ""), "Get a personalized step-by-step checklist for voter registration tailored to your state and age."),
-        ("🗳️", t("nav_ballot", lang).replace("🗳️ ", ""), "Experience how the EVM and VVPAT work in a realistic, guided simulation."),
-        ("🔍", t("nav_myth", lang).replace("🔍 ", ""), "Verify election-related claims with fact-checked verdicts and official sources."),
+        ("🗺️", t("nav_roadmap", lang).replace("🗺️ ", ""), t("feat_roadmap_desc", lang)),
+        ("🗳️", t("nav_ballot", lang).replace("🗳️ ", ""), t("feat_ballot_desc", lang)),
+        ("🔍", t("nav_myth", lang).replace("🔍 ", ""), t("feat_myth_desc", lang)),
     ]
     for col, (icon, title, desc) in zip(cols, cards):
         with col:
@@ -88,17 +95,54 @@ def render_home_page(lang: str = "en") -> None:
     # ── helpful icon cards ──
     st.markdown(f"## {t('essential_info', lang)}")
     st.markdown(
-        """
+        f"""
         <div class="icon-card-grid">
-            <div class="icon-card"><span class="ic-icon">🔞</span><div class="ic-title">Min. Voting Age</div><div class="ic-desc">You must be 18+ on the qualifying date to register as a voter.</div></div>
-            <div class="icon-card"><span class="ic-icon">🪪</span><div class="ic-title">12 Accepted IDs</div><div class="ic-desc">Voter ID, Aadhaar, Passport, PAN Card, Driving License & more.</div></div>
-            <div class="icon-card"><span class="ic-icon">📞</span><div class="ic-title">Helpline: 1950</div><div class="ic-desc">Call the National Voter Helpline for any election-related query.</div></div>
-            <div class="icon-card"><span class="ic-icon">🔒</span><div class="ic-title">Secret Ballot</div><div class="ic-desc">Your vote is 100% secret. No one can see whom you voted for.</div></div>
+            <div class="icon-card"><span class="ic-icon">🔞</span><div class="ic-title">{t("min_voting_age", lang)}</div><div class="ic-desc">{t("min_age_desc", lang)}</div></div>
+            <div class="icon-card"><span class="ic-icon">🪪</span><div class="ic-title">{t("accepted_ids", lang)}</div><div class="ic-desc">{t("accepted_ids_desc", lang)}</div></div>
+            <div class="icon-card"><span class="ic-icon">📞</span><div class="ic-title">{t("helpline_1950", lang)}</div><div class="ic-desc">{t("helpline_desc", lang)}</div></div>
+            <div class="icon-card"><span class="ic-icon">🔒</span><div class="ic-title">{t("secret_ballot", lang)}</div><div class="ic-desc">{t("secret_ballot_desc", lang)}</div></div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+    # ── polling station lookup (Google Maps) ──
+    st.markdown("## 📍 Find Your Polling Station")
+    pin_col, map_col = st.columns([1, 2])
+    with pin_col:
+        pin_code: str = st.text_input("Enter your PIN code", value="110001", key="pin_input", max_chars=6)
+        if st.button("🔍 Find Stations", key="find_station_btn", use_container_width=True):
+            log_user_action("polling_station_search", {"pin_code": pin_code})
+            stations = find_polling_stations(pin_code)
+            for station in stations:
+                st.markdown(
+                    f'<div class="feat-card"><h3>📍 {station["name"]}</h3>'
+                    f'<p>{station["address"]}<br>'
+                    f'<strong>Distance:</strong> {station["distance"]}</p></div>',
+                    unsafe_allow_html=True,
+                )
+    with map_col:
+        map_url: str = get_polling_station_map_url()
+        fallback: str = get_map_fallback_message()
+        if fallback:
+            st.caption(fallback)
+        st.image(map_url, use_container_width=True)
+
+    # ── election resources (Google Cloud Storage) ──
+    st.markdown("## 📚 Election Resources")
+    resources = list_available_resources()
+    res_cols = st.columns(3)
+    for i, res in enumerate(resources[:6]):
+        with res_cols[i % 3]:
+            st.markdown(
+                f'<div class="feat-card">'
+                f'<h3>📄 {res["title"]}</h3>'
+                f'<p style="font-size:0.85rem;">{res["description"]}</p>'
+                f'<p style="color:#64748b;font-size:0.75rem;">Size: {res["size"]}</p>'
+                f'<a href="{res["url"]}" target="_blank" style="color:#38bdf8;font-size:0.85rem;">⬇️ Download</a>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
 def render_roadmap_page(lang: str = "en") -> None:
     """Render the Election Roadmap page with personalized checklist."""
@@ -143,13 +187,13 @@ def render_roadmap_page(lang: str = "en") -> None:
             st.markdown(f'<div class="tip-box">💡 {tip_text}</div>', unsafe_allow_html=True)
 
         if result["state_info"]:
-            st.markdown("## 🏛️ State-Specific Info")
+            st.markdown(f"## {t('state_specific_info', lang)}")
             info = result["state_info"]
             st.markdown(
                 f'<div class="feat-card"><h3>📌 {state}</h3>'
-                f'<p><strong>Helpline:</strong> {info.get("helpline", "N/A")}<br>'
-                f'<strong>Website:</strong> <a href="{info.get("website", "#")}" target="_blank" style="color:#38bdf8;">{info.get("website", "N/A")}</a><br>'
-                f'<strong>Note:</strong> {info.get("note", "—")}</p></div>',
+                f'<p><strong>{t("helpline_label", lang)}:</strong> {info.get("helpline", "N/A")}<br>'
+                f'<strong>{t("website_label", lang)}:</strong> <a href="{info.get("website", "#")}" target="_blank" style="color:#38bdf8;">{info.get("website", "N/A")}</a><br>'
+                f'<strong>{t("note_label", lang)}:</strong> {info.get("note", "—")}</p></div>',
                 unsafe_allow_html=True,
             )
 
@@ -161,17 +205,17 @@ def render_ballot_page(lang: str = "en") -> None:
     st.markdown(f'<p class="hero-desc">{t("hero_desc", lang)}</p>', unsafe_allow_html=True)
 
     st.markdown(
-        """
+        f"""
         <div class="process-flow">
-            <div class="flow-step"><div class="flow-icon">🪪</div><div class="flow-label">Verify ID</div></div>
+            <div class="flow-step"><div class="flow-icon">🪪</div><div class="flow-label">{t("evm_verify_id", lang)}</div></div>
             <div class="flow-arrow">→</div>
-            <div class="flow-step"><div class="flow-icon">☝️</div><div class="flow-label">Press Button</div></div>
+            <div class="flow-step"><div class="flow-icon">☝️</div><div class="flow-label">{t("evm_press_button", lang)}</div></div>
             <div class="flow-arrow">→</div>
-            <div class="flow-step"><div class="flow-icon">🔔</div><div class="flow-label">Beep + Light</div></div>
+            <div class="flow-step"><div class="flow-icon">🔔</div><div class="flow-label">{t("evm_beep_light", lang)}</div></div>
             <div class="flow-arrow">→</div>
-            <div class="flow-step"><div class="flow-icon">🧾</div><div class="flow-label">VVPAT Slip</div></div>
+            <div class="flow-step"><div class="flow-icon">🧾</div><div class="flow-label">{t("evm_vvpat_slip", lang)}</div></div>
             <div class="flow-arrow">→</div>
-            <div class="flow-step"><div class="flow-icon">✅</div><div class="flow-label">Vote Recorded</div></div>
+            <div class="flow-step"><div class="flow-icon">✅</div><div class="flow-label">{t("evm_vote_recorded", lang)}</div></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -204,7 +248,7 @@ def render_ballot_page(lang: str = "en") -> None:
                 f'</div>',
                 unsafe_allow_html=True,
             )
-            if st.button(f"Select {party['name']}", key=f"party_{i}", use_container_width=True):
+            if st.button(f"{t('select_party', lang)} {party['name']}", key=f"party_{i}", use_container_width=True):
                 st.session_state.ballot_selected = i
                 st.rerun()
 
@@ -213,11 +257,11 @@ def render_ballot_page(lang: str = "en") -> None:
     if st.session_state.ballot_selected is not None:
         selected_party = PARTY_SYMBOLS[st.session_state.ballot_selected]
         st.markdown(
-            f'<div class="evm-machine"><div class="evm-title">Electronic Voting Machine</div>'
-            f'<div class="evm-screen"><div style="color:#64748b;font-size:0.75rem;margin-bottom:4px;">YOUR SELECTION</div>'
+            f'<div class="evm-machine"><div class="evm-title">{t("evm_title", lang)}</div>'
+            f'<div class="evm-screen"><div style="color:#64748b;font-size:0.75rem;margin-bottom:4px;">{t("evm_your_selection", lang)}</div>'
             f'<div style="font-size:2rem;margin-bottom:4px;">{selected_party["symbol"]}</div>'
             f'<div class="evm-selected-name">{selected_party["name"]} — {selected_party["candidate"]}</div></div>'
-            f'<div class="evm-beep">🟢 Ready to cast</div></div>',
+            f'<div class="evm-beep">{t("evm_ready", lang)}</div></div>',
             unsafe_allow_html=True,
         )
 
@@ -228,23 +272,23 @@ def render_ballot_page(lang: str = "en") -> None:
 
             if result["success"]:
                 st.balloons()
-                st.success(f"✅ Vote recorded for: **{result['selected_candidate']}**")
+                st.success(f"{t('vote_recorded_for', lang)}: **{result['selected_candidate']}**")
                 st.markdown(
-                    f'<div class="vvpat-slip"><div class="vvpat-label">VVPAT Verification Slip</div>'
+                    f'<div class="vvpat-slip"><div class="vvpat-label">{t("vvpat_label", lang)}</div>'
                     f'<div style="font-size:2rem;margin:0.5rem 0;">{selected_party["symbol"]}</div>'
                     f'<div class="vvpat-candidate">{result["selected_candidate"]}</div>'
-                    f'<div class="vvpat-time">⏱️ Displayed for 7 seconds</div>'
+                    f'<div class="vvpat-time">{t("vvpat_display_time", lang)}</div>'
                     f'<div style="margin-top:0.75rem;"><span class="badge badge-true">✓ VVPAT MATCHED</span></div></div>',
                     unsafe_allow_html=True,
                 )
-                with st.expander("📖 How the EVM Recorded Your Vote"):
+                with st.expander(t("evm_how_recorded", lang)):
                     st.markdown(result["evm_explanation"])
-                with st.expander("🧾 How VVPAT Verified Your Vote"):
+                with st.expander(t("vvpat_how_verified", lang)):
                     st.markdown(result["vvpat_explanation"])
             else:
                 st.error(result["error"])
     else:
-        st.info("☝️ Select a party card above to start the simulation.")
+        st.info(t("select_party_prompt", lang))
 
 
 def render_mythbuster_page(lang: str = "en") -> None:

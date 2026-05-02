@@ -41,6 +41,11 @@ section[data-testid="stSidebar"] {
     background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%) !important;
     border-right: 1px solid #334155 !important;
 }
+.sidebar-brand { text-align: center; padding: 1.2rem 0.5rem 0.8rem; border-bottom: 1px solid #1e293b; margin-bottom: 0.75rem; }
+.sidebar-brand .sb-logo { font-size: 2rem; margin-bottom: 0.25rem; display: block; }
+.sidebar-brand .sb-title { font-size: 1rem; font-weight: 800; background: linear-gradient(135deg, #f59e0b, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; letter-spacing: -0.02em; }
+.sidebar-brand .sb-sub { font-size: 0.7rem; color: #64748b !important; -webkit-text-fill-color: #64748b; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 2px; display: block; }
+.sidebar-divider { height: 1px; background: linear-gradient(90deg, transparent, #334155, transparent); margin: 0.75rem 0; }
 section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #fbbf24 !important; }
 section[data-testid="stSidebar"] p, section[data-testid="stSidebar"] li, section[data-testid="stSidebar"] span, section[data-testid="stSidebar"] label { color: #cbd5e1 !important; }
 
