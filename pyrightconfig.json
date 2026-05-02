@@ -1,0 +1,11 @@
+{
+  "include": [
+    "."
+  ],
+  "venvPath": ".",
+  "pythonVersion": "3.11",
+  "pythonPlatform": "Windows",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": false,
+  "reportMissingModuleSource": false
+}
