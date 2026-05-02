@@ -7,7 +7,9 @@
 [![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io)
 [![License](https://img.shields.io/badge/License-Educational-blue)](#license)
-[![Tests](https://img.shields.io/badge/Tests-41%20Passed-brightgreen)](#testing)
+[![Tests](https://img.shields.io/badge/Tests-53%20Passed-brightgreen)](#testing)
+[![Languages](https://img.shields.io/badge/Languages-8-blueviolet)](#multi-language-support)
+[![Cloud Run](https://img.shields.io/badge/Cloud%20Run-Ready-4285F4?logo=google-cloud&logoColor=white)](#deployment)
 
 </div>
 
@@ -48,29 +50,24 @@
 
 ### 6. 🌐 Multi-Language Support
 
-The application is built with **internationalization (i18n) readiness** and supports multiple Indian languages:
+The app has a **sidebar language picker** powered by `src/utils/translations.py`. All navigation labels, headings, buttons, and descriptions render in the selected language:
 
 | Language | Code | Status |
 |----------|------|--------|
 | 🇬🇧 English | `en` | ✅ Full Support |
-| 🇮🇳 Hindi (हिन्दी) | `hi` | ✅ UI Labels & Content |
-| 🇮🇳 Bengali (বাংলা) | `bn` | ✅ UI Labels & Content |
-| 🇮🇳 Tamil (தமிழ்) | `ta` | ✅ UI Labels & Content |
-| 🇮🇳 Telugu (తెలుగు) | `te` | ✅ UI Labels & Content |
-| 🇮🇳 Marathi (मराठी) | `mr` | ✅ UI Labels & Content |
-| 🇮🇳 Gujarati (ગુજરાતી) | `gu` | ✅ UI Labels & Content |
-| 🇮🇳 Kannada (ಕನ್ನಡ) | `kn` | ✅ UI Labels & Content |
-| 🇮🇳 Malayalam (മലയാളം) | `ml` | ✅ UI Labels & Content |
-| 🇮🇳 Punjabi (ਪੰਜਾਬੀ) | `pa` | ✅ UI Labels & Content |
-| 🇮🇳 Odia (ଓଡ଼ିଆ) | `or` | ✅ UI Labels & Content |
-| 🇮🇳 Urdu (اردو) | `ur` | ✅ UI Labels & Content |
+| 🇮🇳 Hindi (हिन्दी) | `hi` | ✅ Full UI |
+| 🇮🇳 Bengali (বাংলা) | `bn` | ✅ Full UI |
+| 🇮🇳 Tamil (தமிழ்) | `ta` | ✅ Full UI |
+| 🇮🇳 Telugu (తెలుగు) | `te` | ✅ Full UI |
+| 🇮🇳 Marathi (मराठी) | `mr` | ✅ Full UI |
+| 🇮🇳 Kannada (ಕನ್ನಡ) | `kn` | ✅ Full UI |
+| 🇮🇳 Punjabi (ਪੰਜਾਬੀ) | `pa` | ✅ Full UI |
 
 **How it works:**
-- The app uses **Google Fonts with Noto Sans** family, which provides native script rendering for all 22 official Indian languages
-- All UI text, labels, myths, and instructions are structured in a **locale-ready dictionary format** in `engine.py`
-- The typography system supports **LTR and RTL** layouts (for Urdu)
-- Election myths, roadmap steps, and voter rights content can be served in the user's preferred language
-- Font stack includes: `Inter` (Latin), `Noto Sans Devanagari` (Hindi/Marathi), `Noto Sans Bengali`, `Noto Sans Tamil`, and other Noto variants
+- `translations.py` stores a `TRANSLATIONS` dict keyed by UI string ID → language code → translated text
+- The `t(key, lang)` helper resolves strings with automatic English fallback
+- Language selector in the sidebar persists via `st.session_state`
+- Google Fonts (Inter + Noto Sans families) ensure proper script rendering
 
 ---
 
@@ -78,24 +75,37 @@ The application is built with **internationalization (i18n) readiness** and supp
 
 ```
 easy-election/
-├── app.py              # Streamlit UI — pages, layout, party cards, visuals
-├── engine.py           # Logic layer — roadmap, ballot, myths, i18n, sanitization
-├── prompts.py          # Chain-of-Thought system prompts for AI evaluation
-├── requirements.txt    # Minimal dependencies (3 packages)
-├── .env                # API keys (not committed)
-├── .env.example        # Template for environment variables
-├── .gitignore          # Git ignore rules
-├── README.md           # This file
+├── app.py                    # Thin entry-point dispatcher
+├── Dockerfile                # Production container
+├── .dockerignore
+├── requirements.txt          # All dependencies incl. GCP
+├── .env.example              # Environment template
+├── src/
+│   ├── __init__.py
+│   ├── logic/
+│   │   ├── election_engine.py   # Core business logic (roadmap, ballot, myths)
+│   │   └── prompt_builder.py    # CoT prompt templates
+│   ├── services/
+│   │   ├── cloud_logging_service.py   # Structured Google Cloud Logging
+│   │   ├── cloud_storage_service.py   # GCS resource caching
+│   │   └── google_maps_service.py     # Maps / Places API
+│   ├── ui/
+│   │   ├── pages.py            # Page renderers (Home, Roadmap, Ballot, Myth)
+│   │   └── styles.py           # CSS design system injection
+│   └── utils/
+│       ├── validators.py       # Input sanitization & domain validation
+│       └── translations.py     # i18n: 8 Indian languages
 └── tests/
-    ├── __init__.py
-    └── test_app.py     # pytest suite (41 tests)
+    └── test_app.py             # 53 unit tests
 ```
 
 | Module | Responsibility |
 |---|---|
-| `app.py` | UI rendering, page routing, custom CSS, party cards, process flow visuals, session state |
-| `engine.py` | Business logic, election data, i18n content, input sanitization, Maps API |
-| `prompts.py` | LLM prompt templates with Chain-of-Thought reasoning |
+| `app.py` | Page config, CSS injection, sidebar nav + language picker, routing |
+| `src/logic/` | Election engine, prompt factory |
+| `src/services/` | Google Cloud Logging, Cloud Storage, Maps API |
+| `src/ui/` | Page renderers, centralized CSS |
+| `src/utils/` | Validators, translations |
 
 ---
 
@@ -177,13 +187,15 @@ pytest tests/ -v
 - **Semantic structure:** Proper heading hierarchy (h1 → h2 → h3)
 
 ### 6. ✅ Testing
-- **41 unit tests** in `tests/test_app.py` using `pytest`
+- **53 unit tests** in `tests/test_app.py` using `pytest`
 - **Coverage areas:**
   - Input sanitization (XSS, injection, edge cases)
   - Roadmap generation (eligible, underage, state-specific)
   - Ballot simulation (valid, NOTA, invalid, edge cases)
   - Myth verification (known myths, unknown, empty)
   - Prompt formatting (all builders, registry, system prompt)
+  - Cloud services (logging, storage, maps)
+  - Translations module (all languages, fallback)
 
 ---
 

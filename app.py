@@ -16,6 +16,7 @@ from src.ui.pages import (
     render_mythbuster_page,
 )
 from src.services.cloud_logging_service import get_logger, log_user_action
+from src.utils.translations import SUPPORTED_LANGUAGES, get_lang_code, t
 
 
 # ── page configuration (must be FIRST Streamlit call) ──
@@ -42,36 +43,54 @@ logger = get_logger()
 # ── sidebar navigation ──
 with st.sidebar:
     st.markdown("## 🇮🇳 Election Assistant")
+
+    # ── language selector ──
+    lang_name: str = st.selectbox(
+        "🌐 Language",
+        options=list(SUPPORTED_LANGUAGES.keys()),
+        key="lang_select",
+        label_visibility="collapsed",
+    )
+    lang: str = get_lang_code(lang_name)
+    st.session_state["lang"] = lang
+
     st.markdown("---")
+
+    nav_options: list[str] = [
+        t("nav_home", lang),
+        t("nav_roadmap", lang),
+        t("nav_ballot", lang),
+        t("nav_myth", lang),
+    ]
 
     page: str = st.radio(
         "Navigate to",
-        options=["🏠 Home", "🗺️ Roadmap", "🗳️ Ballot Sim", "🔍 Myth Buster"],
+        options=nav_options,
         key="nav_radio",
         label_visibility="collapsed",
     )
 
     st.markdown("---")
     st.markdown(
-        '<div style="text-align:center;padding:0.5rem;">'
-        '<p style="color:#64748b!important;font-size:0.75rem;margin:0;">'
-        "Made with ❤️ for Indian Democracy<br>"
-        "© 2026 Citizen Election Assistant"
-        "</p></div>",
+        f'<div style="text-align:center;padding:0.5rem;">'
+        f'<p style="color:#64748b!important;font-size:0.75rem;margin:0;">'
+        f'{t("footer", lang)}<br>'
+        f"© 2026 Citizen Election Assistant"
+        f"</p></div>",
         unsafe_allow_html=True,
     )
 
 
 # ── route to the active page ──
-log_user_action("page_view", {"page": page})
+log_user_action("page_view", {"page": page, "lang": lang})
 
-if page == "🏠 Home":
-    render_home_page()
-elif page == "🗺️ Roadmap":
-    render_roadmap_page()
-elif page == "🗳️ Ballot Sim":
-    render_ballot_page()
-elif page == "🔍 Myth Buster":
-    render_mythbuster_page()
+if page == nav_options[0]:
+    render_home_page(lang)
+elif page == nav_options[1]:
+    render_roadmap_page(lang)
+elif page == nav_options[2]:
+    render_ballot_page(lang)
+elif page == nav_options[3]:
+    render_mythbuster_page(lang)
 else:
-    render_home_page()
+    render_home_page(lang)
